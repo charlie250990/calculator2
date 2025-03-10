@@ -1,20 +1,27 @@
-import 'package:calculator2/data/models/calculation.dart';
-import 'package:calculator2/helpers/utils.dart';
-import 'package:calculator2/logic/cubits/history/history_cubit.dart';
+import 'package:calculator/data/models/calculation.dart';
+import 'package:calculator/helpers/utils.dart';
+import 'package:calculator/logic/cubits/history/history_cubit.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:math_expressions/math_expressions.dart';
+import 'package:flutter/widgets.dart';
 
 part 'calculation_state.dart';
 
 class CalculationCubit extends Cubit<CalculationState> {
   final HistoryCubit _historyCubit;
+  final FocusNode _focusNode;
 
-  CalculationCubit({required HistoryCubit historyCubit})
+  CalculationCubit({required HistoryCubit historyCubit, required FocusNode focusNode})
       : _historyCubit = historyCubit,
+        _focusNode = focusNode,
         super(const CalculationState());
 
   void onAdd(String value) {
+    if (value.isEmpty) {
+      emit(state.copyWith(isError: true, error: 'Input cannot be empty.'));
+      return;
+    }
     try {
       emit(state.copyWith(isError: false, error: null));
       String question = state.question;
@@ -22,6 +29,7 @@ class CalculationCubit extends Cubit<CalculationState> {
       bool isInitial = state.isInitial;
       List<String> questionSplit = state.questionSplit;
       String last = question[question.length - 1];
+      int cursorPosition = state.cursorPosition ?? question.length;
       int lastOperatorIndex = question.split('').lastIndexWhere((element) =>
           Utils.isParentheses(element) ||
           element == '%' ||
@@ -209,8 +217,21 @@ class CalculationCubit extends Cubit<CalculationState> {
         }
       }
 
-      final questionFinal = isInitial ? input : question += input;
-      emit(state.copyWith(question: questionFinal));
+      final questionFinal = isInitial
+          ? input
+          : question.substring(0, cursorPosition) +
+              input +
+              question.substring(cursorPosition);
+      cursorPosition += input.length;
+      emit(state.copyWith(question: questionFinal, cursorPosition: cursorPosition));
+
+      // Calculate the answer in real-time
+      onUpdateQuestion(questionFinal);
+
+      // Set focus to the TextField if not already focused
+      if (!_focusNode.hasFocus) {
+        _focusNode.requestFocus();
+      }
     } catch (e) {
       emit(state.copyWith(isError: true, error: e.toString()));
     }
@@ -219,12 +240,23 @@ class CalculationCubit extends Cubit<CalculationState> {
   void onDelete() {
     emit(state.copyWith(isError: false, error: null));
     String question = state.question;
-    bool isLast = question.length == 1;
+    int cursorPosition = state.cursorPosition ?? question.length;
+    
+    if (cursorPosition > 0) {
+      question = question.substring(0, cursorPosition - 1) + question.substring(cursorPosition);
+      cursorPosition--;
+    }
+
+    bool isLast = question.isEmpty;
     emit(state.copyWith(
-      question: isLast ? '0' : question.substring(0, question.length - 1),
+      question: isLast ? '0' : question,
+      cursorPosition: isLast ? null : cursorPosition,
     ));
     if (isLast) {
       onClear();
+    } else {
+      // Update the calculation and show the new answer
+      onUpdateQuestion(question);
     }
   }
 
@@ -249,6 +281,10 @@ class CalculationCubit extends Cubit<CalculationState> {
         answer: result,
       ));
       emit(state.copyWith(answer: result));
+
+      // New flow: clear the current text field and add the answer as new data
+      String newQuestion = result.toString();
+      emit(state.copyWith(question: newQuestion, cursorPosition: newQuestion.length));
     } catch (e) {
       emit(state.copyWith(isError: true, error: 'Invalid format used.'));
     }
@@ -256,5 +292,29 @@ class CalculationCubit extends Cubit<CalculationState> {
 
   void onClear() {
     emit(const CalculationState());
+  }
+
+  void onUpdateQuestion(String question) {
+    try {
+      emit(state.copyWith(isError: false, error: null, question: question));
+      if (question.isEmpty) {
+        emit(state.copyWith(answer: null));
+        return;
+      }
+      String formattedQuestion = question.replaceAll('×', '*').replaceAll('%', '*0.01').replaceAll('÷', '/');
+      num? result = Parser().parse(formattedQuestion).evaluate(EvaluationType.REAL, ContextModel());
+      final resultString = result.toString();
+      bool isDouble = resultString[resultString.lastIndexOf('.') + 1] != '0';
+      if (!isDouble) {
+        result = result?.toInt();
+      }
+      emit(state.copyWith(answer: result));
+    } catch (e) {
+      emit(state.copyWith(isError: true, error: 'Invalid format used.', answer: null));
+    }
+  }
+
+  void onUpdateCursorPosition(int cursorPosition) {
+    emit(state.copyWith(cursorPosition: cursorPosition));
   }
 }

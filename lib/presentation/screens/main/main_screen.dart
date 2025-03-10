@@ -1,11 +1,10 @@
-import 'package:calculator2/data/models/calculation.dart';
-import 'package:calculator2/helpers/utils.dart';
-import 'package:calculator2/logic/cubits/calculation/calculation_cubit.dart';
-import 'package:calculator2/logic/cubits/history/history_cubit.dart';
-import 'package:calculator2/logic/cubits/theme/theme_cubit.dart';
-import 'package:calculator2/presentation/screens/profile/profile_screen.dart';
+import 'package:calculator/helpers/utils.dart';
+import 'package:calculator/logic/cubits/calculation/calculation_cubit.dart';
+import 'package:calculator/logic/cubits/history/history_cubit.dart';
+import 'package:calculator/logic/cubits/theme/theme_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ButtonModel {
   final String operator;
@@ -33,8 +32,9 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  bool _isHistoryVisible = false;
   final ScrollController _scrollController = ScrollController();
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
   final List<ButtonModel> buttons = [
     ButtonModel(operator: 'C', tooltip: 'Clear'),
     ButtonModel(operator: '()', tooltip: 'Brackets'),
@@ -64,35 +64,48 @@ class _MainScreenState extends State<MainScreen> {
   ];
 
   @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _controller.text = context.read<CalculationCubit>().state.question;
+    _controller.addListener(() {
+      context.read<CalculationCubit>().onUpdateCursorPosition(_controller.selection.baseOffset);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _focusNode.requestFocus();
+      _controller.selection = TextSelection.fromPosition(TextPosition(offset: _controller.text.length));
+    });
   }
 
-  void _showHistory() {
-    setState(() {
-      _isHistoryVisible = !_isHistoryVisible;
-    });
+  @override
+  void dispose() {
+    _controller.dispose();
+    _scrollController.dispose();
+    _focusNode.dispose();
+    super.dispose();
   }
 
   void _setTheme() {
     context.read<ThemeCubit>().onToggleTheme();
+    setState(() {}); // Trigger a rebuild to apply the new theme
   }
 
   @override
   Widget build(BuildContext context) {
-    final histories =
-        context.select((HistoryCubit cubit) => cubit.state).reversed.toList();
-    final calculationState =
-        context.select((CalculationCubit cubit) => cubit.state);
+    final histories = context.select((HistoryCubit cubit) => cubit.state).reversed.toList();
+    final calculationState = context.select((CalculationCubit cubit) => cubit.state);
     final question = calculationState.question;
     final answer = calculationState.answer;
     final increase1 = calculationState.increase1;
     final increase2 = calculationState.increase2;
     final isInitial = calculationState.isInitial;
     final themeMode = context.select((ThemeCubit cubit) => cubit.state);
-    final themeIcon =
-        themeMode == ThemeMode.light ? Icons.brightness_4 : Icons.brightness_5;
+    final themeIcon = themeMode == ThemeMode.light ? Icons.brightness_4_rounded : Icons.brightness_5_rounded;
+
+    final cursorPosition = calculationState.cursorPosition ?? question.length;
+    _controller.text = question;
+    if (cursorPosition <= _controller.text.length) {
+      _controller.selection = TextSelection.fromPosition(TextPosition(offset: cursorPosition));
+    }
 
     return BlocListener<CalculationCubit, CalculationState>(
       listener: (context, state) {
@@ -101,16 +114,6 @@ class _MainScreenState extends State<MainScreen> {
           duration: const Duration(milliseconds: 500),
           curve: Curves.ease,
         );
-        if (state.isError) {
-          ScaffoldMessenger.of(context)
-            ..clearSnackBars()
-            ..showSnackBar(
-              SnackBar(
-                content: Text('${state.error}'),
-                duration: const Duration(seconds: 2),
-              ),
-            );
-        }
       },
       child: Scaffold(
         body: SafeArea(
@@ -127,55 +130,72 @@ class _MainScreenState extends State<MainScreen> {
                       Expanded(
                         child: SingleChildScrollView(
                           controller: _scrollController,
-                          child: SelectableText.rich(
-                            TextSpan(
-                              children: List<InlineSpan>.generate(
-                                question.length,
-                                (index) => TextSpan(
-                                  text: question[index],
+                          child: GestureDetector(
+                            onTapUp: (details) {
+                              final RenderBox renderBox = context.findRenderObject() as RenderBox;
+                              final offset = renderBox.globalToLocal(details.globalPosition);
+                              final textPainter = TextPainter(
+                                text: TextSpan(
+                                  text: _controller.text,
                                   style: TextStyle(
-                                    color: !Utils.isNumber(question[index])
-                                        ? Theme.of(context).primaryColor
-                                        : null,
+                                    fontSize: increase1
+                                        ? increase2
+                                            ? 26.0
+                                            : 28.0
+                                        : 40.0,
                                   ),
                                 ),
-                              ).toList(),
-                            ),
-                            textAlign: TextAlign.end,
-                            style: TextStyle(
-                              fontSize: increase1
-                                  ? increase2
-                                      ? 26.0
-                                      : 28.0
-                                  : 40.0,
+                                textDirection: TextDirection.ltr,
+                              );
+                              textPainter.layout();
+                              final position = textPainter.getPositionForOffset(offset);
+                              _controller.selection = TextSelection.fromPosition(position);
+                              _focusNode.requestFocus();
+                            },
+                            child: TextField(
+                              maxLines: null,
+                              cursorColor: const Color.fromARGB(255, 39, 45, 54),
+                              decoration: const InputDecoration(
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.all(0),
+                              ),
+                              controller: _controller,
+                              focusNode: _focusNode,
+                              textAlign: TextAlign.end,
+                              readOnly: true,
+                              showCursor: true,
+                              style: TextStyle(
+                                fontSize: increase1
+                                    ? increase2
+                                        ? 26.0
+                                        : 28.0
+                                    : 40.0,
+                              ),
+                              onChanged: (value) {
+                                context.read<CalculationCubit>().onUpdateQuestion(value);
+                              },
                             ),
                           ),
                         ),
                       ),
-                      if (answer != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 22.0),
-                          child: SelectableText.rich(
-                            TextSpan(
-                              children: [
-                                TextSpan(
-                                  text: '=',
-                                  style: TextStyle(
-                                    color: Theme.of(context).primaryColor,
-                                  ),
-                                ),
-                                TextSpan(
-                                  text: Utils.formatAmount(
-                                      answer.toString().length > 15
-                                          ? answer.toStringAsExponential(8)
-                                          : answer.toString()),
-                                ),
-                              ],
-                            ),
-                            textAlign: TextAlign.end,
-                            style: const TextStyle(fontSize: 32.0),
+                      if (answer != null && !['÷', '×', '+', '-'].contains(_controller.text.trim().isNotEmpty ? _controller.text.trim().characters.last : ''))
+                      Padding(
+                        padding: const EdgeInsets.only(top: 22.0),
+                        child: SelectableText.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: Utils.formatAmount(
+                                    answer.toString().length > 15
+                                        ? answer.toStringAsExponential(8)
+                                        : answer.toString()),
+                              ),
+                            ],
                           ),
+                          textAlign: TextAlign.end,
+                          style: const TextStyle(fontSize: 32.0),
                         ),
+                      ),
                     ],
                   ),
                 ),
@@ -184,7 +204,7 @@ class _MainScreenState extends State<MainScreen> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -195,13 +215,265 @@ class _MainScreenState extends State<MainScreen> {
                                 message: 'History',
                                 child: IconButton(
                                   splashRadius: 20.0,
-                                  onPressed:
-                                      histories.isEmpty ? null : _showHistory,
-                                  icon: Icon(
-                                    _isHistoryVisible
-                                        ? Icons.calculate
-                                        : Icons.history,
-                                  ),
+                                  onPressed: () {
+                                    showModalBottomSheet(
+                                      context: context,
+                                      shape: const RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                                      ),
+                                      builder: (BuildContext context) {
+                                        return Container(
+                                          decoration: const BoxDecoration(
+                                            borderRadius: BorderRadius.all(Radius.circular(20)),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                                          height: MediaQuery.of(context).size.height * 0.9,
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                                            mainAxisAlignment: MainAxisAlignment.start,
+                                            children: [
+                                              Flexible(
+                                                child: ShaderMask(
+                                                  shaderCallback: (Rect bounds) {
+                                                    return const LinearGradient(
+                                                      begin: Alignment.topCenter,
+                                                      end: Alignment.bottomCenter,
+                                                      colors: [Colors.transparent, Color.fromARGB(255, 0, 0, 0)],
+                                                      stops: [0.0, 0.5],
+                                                    ).createShader(bounds);
+                                                  },
+                                                  blendMode: BlendMode.dstIn,
+                                                  child: ListView.separated(
+                                                    reverse: true,
+                                                    separatorBuilder: (context, index) =>
+                                                        const SizedBox(height: 25),
+                                                    itemCount: histories.length,
+                                                    itemBuilder: (context, index) {
+                                                      final calculcation = histories[index];
+                                                      final question = calculcation.question;
+                                                      final answer = calculcation.answer;
+                                                      final answerString = answer != null
+                                                          ? answer.toString().length > 15
+                                                              ? answer.toStringAsExponential(8)
+                                                              : answer.toString()
+                                                          : null;
+                                
+                                                      return Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                                                        children: [
+                                                          Material(
+                                                            color: Colors.transparent,
+                                                            child: InkWell(
+                                                              onTap: () =>
+                                                                  context.read<CalculationCubit>().onAdd(question),
+                                                              child: ClipRRect(
+                                                                borderRadius: BorderRadius.circular(20),
+                                                                child: Text(
+                                                                  question,
+                                                                  style: const TextStyle(
+                                                                    fontSize: 16,
+                                                                  ),
+                                                                  textAlign: TextAlign.end,
+                                                                  overflow: TextOverflow.ellipsis,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                          if (answer != null && answerString != null) ...[
+                                                            const SizedBox(height: 5),
+                                                            Material(
+                                                              color: Colors.transparent,
+                                                              child: InkWell(
+                                                                onTap: () => context
+                                                                    .read<CalculationCubit>()
+                                                                    .onAdd(answer.toString()),
+                                                                child: ClipRRect(
+                                                                  borderRadius: BorderRadius.circular(20),
+                                                                  child: Text(
+                                                                    '=${Utils.formatAmount(answerString)}',
+                                                                    style: const TextStyle(
+                                                                      fontSize: 16,
+                                                                    ),
+                                                                    textAlign: TextAlign.end,
+                                                                    overflow: TextOverflow.ellipsis,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ],
+                                                      );
+                                                    },
+                                                  ),
+                                                )
+                                              ),
+                                              const SizedBox(height: 15),
+                                              Row(
+                                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                                children: [
+                                                  Padding(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                                                    child: ElevatedButton(
+                                                      onPressed: () {
+                                                        context.read<HistoryCubit>().onClear();
+                                                        Navigator.pop(context);
+                                                      },
+                                                      style: ElevatedButton.styleFrom(
+                                                        backgroundColor: const Color.fromARGB(255, 39, 45, 54),
+                                                        shape: RoundedRectangleBorder(
+                                                          borderRadius: BorderRadius.circular(50),
+                                                        ),
+                                                      ),
+                                                      child: const Text(
+                                                        'Clear History',
+                                                        style: TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 16,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  Padding(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                                                    child: ElevatedButton(
+                                                      onPressed: () {
+                                                        Navigator.pop(context);
+                                                      },
+                                                      style: ElevatedButton.styleFrom(
+                                                        backgroundColor: const Color.fromARGB(255, 39, 45, 54),
+                                                        shape: RoundedRectangleBorder(
+                                                          borderRadius: BorderRadius.circular(50),
+                                                        ),
+                                                      ),
+                                                      child: const Text(
+                                                        'Close History',
+                                                        style: TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 16,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 20),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  },
+                                  icon: const Icon(Icons.history_rounded),
+                                ),
+                              ),
+                              Tooltip(
+                                message: 'Info',
+                                child: IconButton(
+                                  splashRadius: 20.0,
+                                  onPressed: () {
+                                    showDialog(
+                                      context: context,
+                                      builder: (BuildContext context) {
+                                        return AlertDialog(
+                                          shape: const RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.all(
+                                              Radius.circular(20),
+                                            ),
+                                          ),
+                                          content: SizedBox(
+                                            height: 305,
+                                            child: Column(
+                                              children: [
+                                                const ClipOval(
+                                                  child: Image(
+                                                    height: 70,
+                                                    width: 70,
+                                                    image: AssetImage(
+                                                      'assets/images/icon.png',
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 10),
+                                                Text(
+                                                  'Find more amazing Mini Apps:'.toUpperCase(),
+                                                  style: const TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                                ElevatedButton(
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: const Color.fromARGB(255, 39, 45, 54),
+                                                    shape: RoundedRectangleBorder(
+                                                      borderRadius: BorderRadius.circular(50),
+                                                    ),
+                                                  ),
+                                                  onPressed: () {
+                                                    launchUrl(Uri.parse('https://cafi.one/miniapps'));
+                                                  },
+                                                  child: const Row(
+                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                    children: [
+                                                      Icon(
+                                                        Icons.link_rounded,
+                                                         color: Colors.white,
+                                                      ),
+                                                      SizedBox(width: 15),
+                                                      Text(
+                                                        'Go to site',
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                          color: Colors.white,
+                                                          fontWeight: FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 5),
+                                                const Text(
+                                                  'This app does not track or transmit any data to any server. All calculations are processed locally on your device, without requiring an internet connection. Additionally, it is completely free and ad-free, ensuring a seamless experience while safeguarding your privacy.',
+                                                  textAlign: TextAlign.justify,
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w400,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 15),
+                                                const Text(
+                                                  'Rights Reserved: Cafi © 2025',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w400,
+                                                  ),
+                                                ),
+                                                GestureDetector(
+                                                  onTap: () {
+                                                    launchUrl(Uri.parse('mailto:business@cafi.one?subject="MA Calculator mini app contact"'));
+                                                  },
+                                                  child: const Text(
+                                                    'Email: business@cafi.one',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.w400,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const Text(
+                                                  'Lead developer: Carlos Madrigal',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w400,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  },
+                                  icon: const Icon(Icons.info_outline_rounded),
                                 ),
                               ),
                               Tooltip(
@@ -212,15 +484,6 @@ class _MainScreenState extends State<MainScreen> {
                                   icon: Icon(themeIcon),
                                 ),
                               ),
-                              Tooltip(
-                                message: 'Profile',
-                                child: IconButton(
-                                  splashRadius: 20.0,
-                                  onPressed: () => Navigator.of(context)
-                                      .pushNamed(ProfileScreen.routeName),
-                                  icon: const Icon(Icons.person_outline),
-                                ),
-                              ),
                             ],
                           ),
                         ),
@@ -228,139 +491,45 @@ class _MainScreenState extends State<MainScreen> {
                           message: 'Delete',
                           child: IconButton(
                             splashRadius: 20.0,
-                            disabledColor:
-                                Theme.of(context).primaryColor.withOpacity(0.4),
-                            color: Theme.of(context).primaryColor,
+                            disabledColor: Theme.of(context).disabledColor.withOpacity(0.4),
                             onPressed: isInitial
                                 ? null
                                 : () =>
                                     context.read<CalculationCubit>().onDelete(),
-                            icon: const Icon(Icons.backspace_outlined),
+                            icon: const Icon(Icons.backspace_rounded),
                           ),
                         ),
                       ],
                     ),
                   ),
                   const Divider(thickness: 1),
-                  Stack(
-                    children: [
-                      GridView(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        padding: const EdgeInsets.all(16.0),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 4,
-                          mainAxisSpacing: 8.0,
-                          crossAxisSpacing: 16.0,
+                  Container(
+                    constraints: const BoxConstraints(
+                      maxWidth: 700,
+                    ),
+                    child: Stack(
+                      children: [
+                        GridView(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          padding: const EdgeInsets.all(16.0),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 4,
+                            mainAxisSpacing: 8.0,
+                            crossAxisSpacing: 16.0,
+                          ),
+                          children: buttons
+                              .map((e) => _ButtonItem(buttonModel: e))
+                              .toList(),
                         ),
-                        children: buttons
-                            .map((e) => _ButtonItem(buttonModel: e))
-                            .toList(),
-                      ),
-                      Visibility(
-                        visible: _isHistoryVisible,
-                        child: _buildHistory(context, histories),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildHistory(BuildContext context, List<Calculation> histories) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.4,
-      margin: EdgeInsets.only(
-        right: (MediaQuery.of(context).size.width / 4) + 4.0,
-      ),
-      padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        border: Border(
-          right: BorderSide(color: Theme.of(context).dividerColor),
-          bottom: BorderSide(color: Theme.of(context).dividerColor),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: [
-          Flexible(
-            child: ListView.separated(
-              reverse: true,
-              separatorBuilder: (context, index) =>
-                  const SizedBox(height: 16.0),
-              itemCount: histories.length,
-              itemBuilder: (context, index) {
-                final calculcation = histories[index];
-                final question = calculcation.question;
-                final answer = calculcation.answer;
-                final answerString = answer != null
-                    ? answer.toString().length > 15
-                        ? answer.toStringAsExponential(8)
-                        : answer.toString()
-                    : null;
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () =>
-                            context.read<CalculationCubit>().onAdd(question),
-                        child: Text(
-                          question,
-                          textAlign: TextAlign.end,
-                        ),
-                      ),
-                    ),
-                    if (answer != null && answerString != null) ...[
-                      const SizedBox(height: 6.0),
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () => context
-                              .read<CalculationCubit>()
-                              .onAdd(answer.toString()),
-                          child: Text(
-                            '=${Utils.formatAmount(answerString)}',
-                            style: TextStyle(
-                              color: Theme.of(context).primaryColor,
-                            ),
-                            textAlign: TextAlign.end,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 16.0),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32.0),
-            child: ElevatedButton(
-              onPressed: () {
-                context.read<HistoryCubit>().onClear();
-                _showHistory();
-              },
-              style: ElevatedButton.styleFrom(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(100.0),
-                ),
-              ),
-              child: const Text('Clear History'),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -390,16 +559,8 @@ class __ButtonItemState extends State<_ButtonItem> {
     final isDelete = operator == '⌫';
     final isClear = operator == 'C';
     final isEqual = operator == '=';
-    final color = isEqual
-        ? Colors.white
-        : isClear
-            ? Colors.red
-            : Utils.isNumber(operator)
-                ? Theme.of(context).textTheme.bodyMedium?.color
-                : Theme.of(context).primaryColor;
-    final backgroundColor = isEqual
-        ? Theme.of(context).primaryColor
-        : Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.1);
+    final color = isEqual ? Colors.white : isClear ? Colors.red : Theme.of(context).textTheme.bodyMedium?.color;
+    final backgroundColor = isEqual ? const Color.fromARGB(255, 39, 45, 54) : Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.1);
     final size = widget.buttonModel.size;
     final isBold = widget.buttonModel.isBold;
 
@@ -415,24 +576,32 @@ class __ButtonItemState extends State<_ButtonItem> {
           child: InkWell(
             borderRadius: BorderRadius.circular(100),
             onTapUp: (details) {
-              setState(() {
-                _longPress = null;
-              });
+              if (mounted) {
+                setState(() {
+                  _longPress = null;
+                });
+              }
             },
             onTapDown: (details) {
-              setState(() {
-                _longPress = operator;
-              });
+              if (mounted) {
+                setState(() {
+                  _longPress = operator;
+                });
+              }
             },
             onTapCancel: () {
-              setState(() {
-                _longPress = null;
-              });
+              if (mounted) {
+                setState(() {
+                  _longPress = null;
+                });
+              }
             },
             onTap: () async {
-              setState(() {
-                _longPress = operator;
-              });
+              if (mounted) {
+                setState(() {
+                  _longPress = operator;
+                });
+              }
               if (isDelete) {
                 context.read<CalculationCubit>().onDelete();
               } else if (isClear) {
@@ -443,9 +612,11 @@ class __ButtonItemState extends State<_ButtonItem> {
                 context.read<CalculationCubit>().onAdd(operator);
               }
               await Future.delayed(const Duration(milliseconds: 100));
-              setState(() {
-                _longPress = null;
-              });
+              if (mounted) {
+                setState(() {
+                  _longPress = null;
+                });
+              }
             },
             child: Container(
               padding: const EdgeInsets.all(8.0),

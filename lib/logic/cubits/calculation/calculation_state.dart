@@ -5,12 +5,14 @@ class CalculationState extends Equatable {
   final num? answer;
   final bool isError;
   final String? error;
+  final int? cursorPosition;
 
   const CalculationState({
     this.question = '0',
     this.answer,
     this.isError = false,
     this.error,
+    this.cursorPosition,
   });
 
   List<String> get questionSplit => question.split('').toList();
@@ -23,15 +25,17 @@ class CalculationState extends Equatable {
     num? answer,
     bool? isError,
     String? error,
+    int? cursorPosition,
   }) {
     return CalculationState(
       question: question ?? this.question,
       answer: answer ?? this.answer,
       isError: isError ?? this.isError,
       error: error ?? this.error,
+      cursorPosition: cursorPosition ?? this.cursorPosition,
     );
   }
 
   @override
-  List<Object?> get props => [question, answer, isError, error];
+  List<Object?> get props => [question, answer, isError, error, cursorPosition];
 }

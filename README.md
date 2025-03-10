@@ -1,8 +1,8 @@
 # Calculator App
 
-![GitHub stars](https://img.shields.io/github/stars/mbp27/calculator2?style=social)
-![GitHub forks](https://img.shields.io/github/forks/mbp27/calculator2?style=social)
-![GitHub watchers](https://img.shields.io/github/watchers/mbp27/calculator2?style=social)
+![GitHub stars](https://img.shields.io/github/stars/mbp27/calculator?style=social)
+![GitHub forks](https://img.shields.io/github/forks/mbp27/calculator?style=social)
+![GitHub watchers](https://img.shields.io/github/watchers/mbp27/calculator?style=social)
 
 [![GitHub license](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![platform](https://img.shields.io/badge/platform-Flutter-blue.svg)](https://flutter.dev/)
@@ -46,7 +46,7 @@ It's recommended to do self-study about it before jumping into the project [here
 1. Clone this project.
 2. Open with your favorite tools editor.
 3. Run `pub get` on root project to generated pubspec.lock file.
-4. Run the App using [this](https://github.com/mbp27/calculator2#run-the-app-with-command). Enjoy!
+4. Run the App using [this](https://github.com/mbp27/calculator#run-the-app-with-command). Enjoy!
 
 ## Run The App with Command
 ```console
@@ -54,7 +54,7 @@ flutter run --dart-define appName='Calculator' --target=lib/main.dart
 ```
 
 ## Example APK
-Difficult to run this project? I have included `.apk` for those of you who want to try [here](https://github.com/mbp27/calculator2/releases). Check out the assets section and download the latest version. Enjoy!
+Difficult to run this project? I have included `.apk` for those of you who want to try [here](https://github.com/mbp27/calculator/releases). Check out the assets section and download the latest version. Enjoy!
 
 ## Flutter Gen:
 Generate every time you add or remove assets
