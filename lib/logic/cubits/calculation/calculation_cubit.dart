@@ -5,7 +5,6 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:math_expressions/math_expressions.dart';
 import 'package:flutter/widgets.dart';
-
 part 'calculation_state.dart';
 
 class CalculationCubit extends Cubit<CalculationState> {
@@ -265,17 +264,30 @@ class CalculationCubit extends Cubit<CalculationState> {
       emit(state.copyWith(isError: false, error: null));
       String question = state.question;
       if (state.isInitial) return;
+      
       question = question.replaceAll('×', '*');
-      question = question.replaceAll('%', '*0.01');
       question = question.replaceAll('÷', '/');
+      
+      // First handle addition/subtraction with percentages (no spaces in pattern)
+      question = question.replaceAllMapped(RegExp(r'(\d+)([\+\-])(\d+)%'), (match) {
+        double leftValue = double.parse(match.group(1)!);
+        String operator = match.group(2)!;
+        double percentValue = double.parse(match.group(3)!) / 100.0;
+        return '($leftValue $operator ($leftValue * $percentValue))';
+      });
+      
+      // Then handle any remaining standalone percentages
+      question = question.replaceAllMapped(RegExp(r'(\d+)%'), (match) {
+        return '(${match.group(1)}*0.01)';
+      });
+      
       num? result = Parser()
           .parse(question)
           .evaluate(EvaluationType.REAL, ContextModel());
-      final resultString = result.toString();
-      bool isDouble = resultString[resultString.lastIndexOf('.') + 1] != '0';
-      if (!isDouble) {
-        result = result?.toInt();
-      }
+      
+      // Format the result to avoid scientific notation
+      result = formatResult(result);
+      
       _historyCubit.onAdd(Calculation(
         question: state.question,
         answer: result,
@@ -301,16 +313,68 @@ class CalculationCubit extends Cubit<CalculationState> {
         emit(state.copyWith(answer: null));
         return;
       }
-      String formattedQuestion = question.replaceAll('×', '*').replaceAll('%', '*0.01').replaceAll('÷', '/');
+      
+      String formattedQuestion = question.replaceAll('×', '*').replaceAll('÷', '/');
+      
+      // First handle addition/subtraction with percentages (no spaces in pattern)
+      formattedQuestion = formattedQuestion.replaceAllMapped(RegExp(r'(\d+)([\+\-])(\d+)%'), (match) {
+        double leftValue = double.parse(match.group(1)!);
+        String operator = match.group(2)!;
+        double percentValue = double.parse(match.group(3)!) / 100.0;
+        return '($leftValue $operator ($leftValue * $percentValue))';
+      });
+      
+      // Then handle any remaining standalone percentages
+      formattedQuestion = formattedQuestion.replaceAllMapped(RegExp(r'(\d+)%'), (match) {
+        return '(${match.group(1)}*0.01)';
+      });
+      
       num? result = Parser().parse(formattedQuestion).evaluate(EvaluationType.REAL, ContextModel());
-      final resultString = result.toString();
-      bool isDouble = resultString[resultString.lastIndexOf('.') + 1] != '0';
-      if (!isDouble) {
-        result = result?.toInt();
-      }
+      
+      // Format the result to avoid scientific notation
+      result = formatResult(result);
+      
       emit(state.copyWith(answer: result));
     } catch (e) {
       emit(state.copyWith(isError: true, error: 'Invalid format used.', answer: null));
+    }
+  }
+
+  // Helper method to format the result number
+  num? formatResult(num? result) {
+    if (result == null) return null;
+    
+    // Always convert to a formatted string to avoid scientific notation
+    double doubleValue = result.toDouble();
+    String resultStr;
+    
+    // Handle different cases to ensure proper formatting
+    if (doubleValue.abs() > 1e15) {
+      // For extremely large numbers, use fixed notation with limited precision
+      resultStr = doubleValue.toStringAsFixed(0);
+    } else if (doubleValue.abs() < 1e-5 && doubleValue != 0) {
+      // For very small numbers, use a reasonable fixed precision
+      resultStr = doubleValue.toStringAsFixed(10);
+    } else {
+      // For normal range numbers, use a precision that avoids rounding issues
+      resultStr = doubleValue.toStringAsFixed(10);
+    }
+    
+    // Remove trailing zeros
+    while (resultStr.contains('.') && resultStr.endsWith('0')) {
+      resultStr = resultStr.substring(0, resultStr.length - 1);
+    }
+    
+    // Remove decimal point if it's the last character
+    if (resultStr.endsWith('.')) {
+      resultStr = resultStr.substring(0, resultStr.length - 1);
+    }
+    
+    // Try to parse as an integer if possible
+    if (resultStr.contains('.')) {
+      return double.parse(resultStr);
+    } else {
+      return int.parse(resultStr);
     }
   }
 

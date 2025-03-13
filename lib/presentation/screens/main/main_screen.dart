@@ -3,6 +3,7 @@ import 'package:calculator/logic/cubits/calculation/calculation_cubit.dart';
 import 'package:calculator/logic/cubits/history/history_cubit.dart';
 import 'package:calculator/logic/cubits/theme/theme_cubit.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -85,6 +86,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _setTheme() {
+    HapticFeedback.mediumImpact();
     context.read<ThemeCubit>().onToggleTheme();
     setState(() {}); // Trigger a rebuild to apply the new theme
   }
@@ -216,6 +218,7 @@ class _MainScreenState extends State<MainScreen> {
                                 child: IconButton(
                                   splashRadius: 20.0,
                                   onPressed: () {
+                                    HapticFeedback.mediumImpact();
                                     showModalBottomSheet(
                                       context: context,
                                       shape: const RoundedRectangleBorder(
@@ -371,6 +374,7 @@ class _MainScreenState extends State<MainScreen> {
                                 child: IconButton(
                                   splashRadius: 20.0,
                                   onPressed: () {
+                                    HapticFeedback.mediumImpact();
                                     showDialog(
                                       context: context,
                                       builder: (BuildContext context) {
@@ -409,6 +413,7 @@ class _MainScreenState extends State<MainScreen> {
                                                     ),
                                                   ),
                                                   onPressed: () {
+                                                    HapticFeedback.mediumImpact();
                                                     launchUrl(Uri.parse('https://cafi.one/miniapps'));
                                                   },
                                                   child: const Row(
@@ -449,6 +454,7 @@ class _MainScreenState extends State<MainScreen> {
                                                 ),
                                                 GestureDetector(
                                                   onTap: () {
+                                                    HapticFeedback.mediumImpact();
                                                     launchUrl(Uri.parse('mailto:business@cafi.one?subject="MA Calculator mini app contact"'));
                                                   },
                                                   child: const Text(
@@ -583,6 +589,7 @@ class __ButtonItemState extends State<_ButtonItem> {
               }
             },
             onTapDown: (details) {
+              HapticFeedback.mediumImpact();
               if (mounted) {
                 setState(() {
                   _longPress = operator;
@@ -597,6 +604,7 @@ class __ButtonItemState extends State<_ButtonItem> {
               }
             },
             onTap: () async {
+              HapticFeedback.mediumImpact();
               if (mounted) {
                 setState(() {
                   _longPress = operator;
