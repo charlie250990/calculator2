@@ -86,7 +86,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _setTheme() {
-    HapticFeedback.mediumImpact();
+    HapticFeedback.heavyImpact();
     context.read<ThemeCubit>().onToggleTheme();
     setState(() {}); // Trigger a rebuild to apply the new theme
   }
@@ -195,7 +195,7 @@ class _MainScreenState extends State<MainScreen> {
                             ],
                           ),
                           textAlign: TextAlign.end,
-                          style: const TextStyle(fontSize: 32.0),
+                          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 32.0),
                         ),
                       ),
                     ],
@@ -218,7 +218,7 @@ class _MainScreenState extends State<MainScreen> {
                                 child: IconButton(
                                   splashRadius: 20.0,
                                   onPressed: () {
-                                    HapticFeedback.mediumImpact();
+                                    HapticFeedback.heavyImpact();
                                     showModalBottomSheet(
                                       context: context,
                                       shape: const RoundedRectangleBorder(
@@ -274,7 +274,7 @@ class _MainScreenState extends State<MainScreen> {
                                                                 child: Text(
                                                                   question,
                                                                   style: const TextStyle(
-                                                                    fontSize: 16,
+                                                                    fontSize: 18,
                                                                   ),
                                                                   textAlign: TextAlign.end,
                                                                   overflow: TextOverflow.ellipsis,
@@ -295,7 +295,8 @@ class _MainScreenState extends State<MainScreen> {
                                                                   child: Text(
                                                                     '=${Utils.formatAmount(answerString)}',
                                                                     style: const TextStyle(
-                                                                      fontSize: 16,
+                                                                      fontSize: 18,
+                                                                      fontWeight: FontWeight.w700,
                                                                     ),
                                                                     textAlign: TextAlign.end,
                                                                     overflow: TextOverflow.ellipsis,
@@ -374,7 +375,7 @@ class _MainScreenState extends State<MainScreen> {
                                 child: IconButton(
                                   splashRadius: 20.0,
                                   onPressed: () {
-                                    HapticFeedback.mediumImpact();
+                                    HapticFeedback.heavyImpact();
                                     showDialog(
                                       context: context,
                                       builder: (BuildContext context) {
@@ -413,7 +414,7 @@ class _MainScreenState extends State<MainScreen> {
                                                     ),
                                                   ),
                                                   onPressed: () {
-                                                    HapticFeedback.mediumImpact();
+                                                    HapticFeedback.heavyImpact();
                                                     launchUrl(Uri.parse('https://cafi.one/miniapps'));
                                                   },
                                                   child: const Row(
@@ -454,7 +455,7 @@ class _MainScreenState extends State<MainScreen> {
                                                 ),
                                                 GestureDetector(
                                                   onTap: () {
-                                                    HapticFeedback.mediumImpact();
+                                                    HapticFeedback.heavyImpact();
                                                     launchUrl(Uri.parse('mailto:business@cafi.one?subject="MA Calculator mini app contact"'));
                                                   },
                                                   child: const Text(
@@ -589,7 +590,7 @@ class __ButtonItemState extends State<_ButtonItem> {
               }
             },
             onTapDown: (details) {
-              HapticFeedback.mediumImpact();
+              HapticFeedback.heavyImpact();
               if (mounted) {
                 setState(() {
                   _longPress = operator;
@@ -604,7 +605,7 @@ class __ButtonItemState extends State<_ButtonItem> {
               }
             },
             onTap: () async {
-              HapticFeedback.mediumImpact();
+     
               if (mounted) {
                 setState(() {
                   _longPress = operator;

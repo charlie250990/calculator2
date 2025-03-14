@@ -37,9 +37,7 @@ class CalculationCubit extends Cubit<CalculationState> {
           element == '-' ||
           element == '+');
 
-      /// Check if input value is number
       if (Utils.isNumber(input)) {
-        /// Check if input digits too long
         bool isTooLong = (question.length - lastOperatorIndex) > 15;
         if (isTooLong) {
           throw 'Can\'t enter more than 15 digits';
@@ -49,7 +47,6 @@ class CalculationCubit extends Cubit<CalculationState> {
         }
       }
 
-      /// Check if input value is parentheses
       bool isParentheses = Utils.isParentheses(input);
       if (isParentheses) {
         input = '';
@@ -76,7 +73,6 @@ class CalculationCubit extends Cubit<CalculationState> {
         }
       }
 
-      /// Check if input value is percentage
       bool isPercentage = input == '%';
       if (isPercentage) {
         if (isInitial) {
@@ -90,7 +86,6 @@ class CalculationCubit extends Cubit<CalculationState> {
         }
       }
 
-      /// Check if input value is division
       bool isDivision = input == '÷';
       if (isDivision) {
         if (isInitial) {
@@ -106,7 +101,6 @@ class CalculationCubit extends Cubit<CalculationState> {
         }
       }
 
-      /// Check if input value is multiplication
       bool isMultiplication = input == '×';
       if (isMultiplication) {
         if (isInitial) {
@@ -122,7 +116,6 @@ class CalculationCubit extends Cubit<CalculationState> {
         }
       }
 
-      /// Check if input value is plus
       bool isPlus = input == '+';
       if (isPlus) {
         if (isInitial) {
@@ -138,7 +131,6 @@ class CalculationCubit extends Cubit<CalculationState> {
         }
       }
 
-      /// Check if input value is minus
       bool isMinus = input == '-';
       if (isMinus) {
         if (isInitial) {
@@ -155,7 +147,6 @@ class CalculationCubit extends Cubit<CalculationState> {
         }
       }
 
-      /// Check if input value is negative
       bool isNegative = input == '+/-';
       if (isNegative) {
         if (isInitial) {
@@ -192,7 +183,6 @@ class CalculationCubit extends Cubit<CalculationState> {
         }
       }
 
-      /// Check if input value is decimal
       bool isDecimal = input == '.';
       if (isDecimal) {
         if (isInitial) {
@@ -268,7 +258,6 @@ class CalculationCubit extends Cubit<CalculationState> {
       question = question.replaceAll('×', '*');
       question = question.replaceAll('÷', '/');
       
-      // First handle addition/subtraction with percentages (no spaces in pattern)
       question = question.replaceAllMapped(RegExp(r'(\d+)([\+\-])(\d+)%'), (match) {
         double leftValue = double.parse(match.group(1)!);
         String operator = match.group(2)!;
@@ -276,7 +265,6 @@ class CalculationCubit extends Cubit<CalculationState> {
         return '($leftValue $operator ($leftValue * $percentValue))';
       });
       
-      // Then handle any remaining standalone percentages
       question = question.replaceAllMapped(RegExp(r'(\d+)%'), (match) {
         return '(${match.group(1)}*0.01)';
       });
@@ -285,7 +273,6 @@ class CalculationCubit extends Cubit<CalculationState> {
           .parse(question)
           .evaluate(EvaluationType.REAL, ContextModel());
       
-      // Format the result to avoid scientific notation
       result = formatResult(result);
       
       _historyCubit.onAdd(Calculation(
@@ -294,9 +281,10 @@ class CalculationCubit extends Cubit<CalculationState> {
       ));
       emit(state.copyWith(answer: result));
 
-      // New flow: clear the current text field and add the answer as new data
       String newQuestion = result.toString();
       emit(state.copyWith(question: newQuestion, cursorPosition: newQuestion.length));
+      emit(state.copyWith(answer: 0));
+    
     } catch (e) {
       emit(state.copyWith(isError: true, error: 'Invalid format used.'));
     }
@@ -316,7 +304,6 @@ class CalculationCubit extends Cubit<CalculationState> {
       
       String formattedQuestion = question.replaceAll('×', '*').replaceAll('÷', '/');
       
-      // First handle addition/subtraction with percentages (no spaces in pattern)
       formattedQuestion = formattedQuestion.replaceAllMapped(RegExp(r'(\d+)([\+\-])(\d+)%'), (match) {
         double leftValue = double.parse(match.group(1)!);
         String operator = match.group(2)!;
@@ -324,53 +311,43 @@ class CalculationCubit extends Cubit<CalculationState> {
         return '($leftValue $operator ($leftValue * $percentValue))';
       });
       
-      // Then handle any remaining standalone percentages
       formattedQuestion = formattedQuestion.replaceAllMapped(RegExp(r'(\d+)%'), (match) {
         return '(${match.group(1)}*0.01)';
       });
-      
       num? result = Parser().parse(formattedQuestion).evaluate(EvaluationType.REAL, ContextModel());
-      
-      // Format the result to avoid scientific notation
       result = formatResult(result);
-      
-      emit(state.copyWith(answer: result));
+      if (question.contains('+') || question.contains('-') || question.contains('×') || question.contains('÷')) {
+        emit(state.copyWith(answer: result));
+      } else {
+        emit(state.copyWith(answer: null));
+      }
     } catch (e) {
       emit(state.copyWith(isError: true, error: 'Invalid format used.', answer: null));
     }
   }
 
-  // Helper method to format the result number
   num? formatResult(num? result) {
     if (result == null) return null;
     
-    // Always convert to a formatted string to avoid scientific notation
     double doubleValue = result.toDouble();
     String resultStr;
     
-    // Handle different cases to ensure proper formatting
     if (doubleValue.abs() > 1e15) {
-      // For extremely large numbers, use fixed notation with limited precision
       resultStr = doubleValue.toStringAsFixed(0);
     } else if (doubleValue.abs() < 1e-5 && doubleValue != 0) {
-      // For very small numbers, use a reasonable fixed precision
       resultStr = doubleValue.toStringAsFixed(10);
     } else {
-      // For normal range numbers, use a precision that avoids rounding issues
       resultStr = doubleValue.toStringAsFixed(10);
     }
     
-    // Remove trailing zeros
     while (resultStr.contains('.') && resultStr.endsWith('0')) {
       resultStr = resultStr.substring(0, resultStr.length - 1);
     }
     
-    // Remove decimal point if it's the last character
     if (resultStr.endsWith('.')) {
       resultStr = resultStr.substring(0, resultStr.length - 1);
     }
     
-    // Try to parse as an integer if possible
     if (resultStr.contains('.')) {
       return double.parse(resultStr);
     } else {
